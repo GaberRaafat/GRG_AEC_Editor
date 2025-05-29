@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AEC Vision | Architectural Editor</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #1a2a3a;
+            --primary-light: #2a3a4a;
+            --accent: #4a90e2;
+            --accent-hover: #3a80d2;
+            --text-primary: #e0e0e0;
+            --text-secondary: #a0a0a0;
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --border-radius: 6px;
+            --shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+            --transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            --panel-width: 280px;
+            --toolbar-height: 52px;
+            --mode-2d-color: #4CAF50;
+            /* Green for 2D mode */
+            --mode-3d-color: #2196F3;
+            /* Blue for 3D mode */
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: var(--text-primary);
+            background: var(--bg-primary);
+            overflow: hidden;
+            height: 100vh;
+        }
+
+        #viewer-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0e13;
+        }
+
+        /* Floating Control Panel */
+        .control-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        /* Main Toolbar */
+        .toolbar {
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 8px;
+            display: flex;
+            gap: 8px;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .tool-group {
+            display: flex;
+            gap: 8px;
+            padding-right: 8px;
+            border-right: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .tool-group:last-child {
+            border-right: none;
+            padding-right: 0;
+        }
+
+        .tool-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: var(--border-radius);
+            border: none;
+            background: transparent;
+            color: var(--text-primary);
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+        }
+
+        .tool-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        /* Updated Switch Mode Button */
+        #switch-mode-btn {
+            width: 60px;
+            /* Wider to accommodate text */
+            position: relative;
+            overflow: hidden;
+            background-color: var(--mode-2d-color);
+        }
+
+        #switch-mode-btn::after {
+            content: "2D";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 12px;
+            font-weight: 600;
+            transition: var(--transition);
+        }
+
+        body.mode-3d #switch-mode-btn {
+            background-color: var(--mode-3d-color);
+        }
+
+        body.mode-3d #switch-mode-btn::after {
+            content: "3D";
+        }
+
+        /* Hide the icon when showing text */
+        #switch-mode-btn i {
+            display: none;
+        }
+
+        /* Property Controls */
+        .property-controls {
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 16px;
+            width: 240px;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .property-row {
+            margin-bottom: 16px;
+        }
+
+        .property-label {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .property-value {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .property-value input {
+            flex: 1;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--border-radius);
+            color: var(--text-primary);
+            font-size: 14px;
+            transition: var(--transition);
+        }
+
+        .property-value input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+        }
+
+        /* Wall List Panel */
+        #wall-list {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: var(--bg-secondary);
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow);
+            padding: 16px;
+            width: 240px;
+            max-height: 60vh;
+            overflow-y: auto;
+            backdrop-filter: blur(4px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: var(--text-primary);
+            z-index: 1001;
+            margin: 0;
+        }
+
+        #wall-list .header {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 16px;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        #wall-list em {
+            color: var(--text-secondary);
+            font-style: normal;
+            font-size: 12px;
+        }
+
+        /* Dimension Labels */
+        .dimension-label {
+            pointer-events: none;
+            user-select: none;
+            font-family: 'Inter', sans-serif;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            backdrop-filter: blur(2px);
+        }
+
+        /* Dark Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        #wall-tool.active {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
+        }
+    </style>
+</head>
+
+<body class="mode-2d">
+    <div id="viewer-container"></div>
+
+    <!-- Control Panel -->
+    <div class="control-panel">
+        <!-- Main Toolbar -->
+        <div class="toolbar">
+            <div class="tool-group">
+                <button id="switch-mode-btn" class="tool-btn" title="Switch View Mode">
+                    <i class="fas fa-cube" id="switch-mode-icon"></i>
+                </button>
+                <button id="zoom-extend" class="tool-btn" title="Zoom to Fit">
+                    <i class="fas fa-expand"></i>
+                </button>
+                <!-- New Wall Tool Button -->
+                <button id="wall-tool" class="tool-btn" title="Wall Drawing Tool">
+                    <i class="fas fa-ruler-horizontal"></i>
+                </button>
+            </div>
+        </div>
+
+        <div id="wall-list">
+            <div id="wall-list-content"></div>
+        </div>
+
+        <script type="module" src="/src/main.ts"></script>
+        <script>
+            // Mode switching functionality
+            document.getElementById('switch-mode-btn').addEventListener('click', function () {
+                const body = document.body;
+                if (body.classList.contains('mode-2d')) {
+                    body.classList.remove('mode-2d');
+                    body.classList.add('mode-3d');
+                } else {
+                    body.classList.remove('mode-3d');
+                    body.classList.add('mode-2d');
+                }
+            });
+
+            document.getElementById('wall-tool').addEventListener('click', function () {
+                const isActive = this.classList.toggle('active');
+                document.dispatchEvent(new CustomEvent('wallDrawingToggle', {
+                    detail: { enabled: isActive }
+                }));
+                if (isActive) {
+                    this.title = "Click to disable wall drawing";
+                } else {
+                    this.title = "Click to enable wall drawing";
+                }
+            });
+        </script>
+</body>
+
+</html>
