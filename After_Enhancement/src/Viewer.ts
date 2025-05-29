@@ -19,21 +19,22 @@ export interface Wall {
 }
 
 export class Viewer {
-    private container: HTMLElement; 
-    private renderer: WebGLRenderer; 
-    private scene2D: Scene; 
+    private container: HTMLElement;
+    private renderer: WebGLRenderer;
+    private scene2D: Scene;
     private scene3D: Scene;
-    private camera2D: OrthographicCamera; 
-    private camera3D: PerspectiveCamera;  
-    private controls2D: OrbitControls; 
-    private controls3D: OrbitControls;  
-    private is2D: boolean = true;  
-    private walls: Wall[] = [];  
-    private wallCounter: number = 0; 
+    private camera2D: OrthographicCamera;
+    private camera3D: PerspectiveCamera;
+    private controls2D: OrbitControls;
+    private controls3D: OrbitControls;
+    private is2D: boolean = true;
+    private walls: Wall[] = [];
+    private wallCounter: number = 0;
     private isDrawing: boolean = false;
     private currentStartPoint: Vector3 | null = null;
     private tempLine: Line | null = null;
     private wallMeshes: Map<string, Object3D> = new Map();
+    private wallLines: Map<string, Line> = new Map();
     private raycaster: Raycaster = new Raycaster();
     private mouse: Vector2 = new Vector2();
     private intersectionPlane: Plane;
@@ -43,15 +44,15 @@ export class Viewer {
     private wallListExpanded: boolean = false;
     private wallDrawingEnabled: boolean = false;
 
-    constructor(container: HTMLElement){
+    constructor(container: HTMLElement) {
         this.container = container;
         this.intersectionPlane = new Plane(new Vector3(0, 0, 1), 0);
-   
+
         this.renderer = this.createRenderer();
         this.renderer.setSize(container.clientWidth, container.clientHeight);
         this.renderer.setPixelRatio(window.devicePixelRatio);
         container.append(this.renderer.domElement);
-     
+
         this.scene2D = this.createScene2D();
         this.scene3D = this.createScene3D();
         this.camera2D = this.createCamera2D();
@@ -80,7 +81,7 @@ export class Viewer {
 
     public setWallDrawingEnabled(enabled: boolean): void {
         this.wallDrawingEnabled = enabled;
-        
+
         if (!enabled && this.isDrawing) {
             this.isDrawing = false;
             if (this.tempLine) {
@@ -95,14 +96,14 @@ export class Viewer {
         window.addEventListener('mousemove', this.onMouseMove.bind(this));
         window.addEventListener('mousedown', this.onMouseDown.bind(this));
         window.addEventListener('mouseup', this.onMouseUp.bind(this));
-        window.addEventListener('contextmenu', (e) => e.preventDefault()); 
+        window.addEventListener('contextmenu', (e) => e.preventDefault());
 
         this.addGridAndLights(this.scene2D);
         this.addGridAndLights(this.scene3D);
     }
 
     private createRenderer(): WebGLRenderer {
-        const renderer = new WebGLRenderer({antialias: true});
+        const renderer = new WebGLRenderer({ antialias: true });
         return renderer;
     }
 
@@ -158,29 +159,28 @@ export class Viewer {
         controls.update();
         return controls;
     }
-
     private addGridAndLights(scene: Scene) {
         if (scene === this.scene2D) {
             const grid = new GridHelper(200, 100, 0x222222, 0x888888);
             grid.position.set(0, 0, 0);
-            grid.rotation.x = Math.PI / 2;  
+            grid.rotation.x = Math.PI / 2;
             scene.add(grid);
 
-            const boundarySize = 100;
-            const boundaryZ = 0.05;  
+            const boundarySize = 200;
+            const boundaryZ = 0.05;
             const boundaryPoints = [
-                new Vector3(-boundarySize/2, -boundarySize/2, boundaryZ),
-                new Vector3(boundarySize/2, -boundarySize/2, boundaryZ),
-                new Vector3(boundarySize/2, boundarySize/2, boundaryZ),
-                new Vector3(-boundarySize/2, boundarySize/2, boundaryZ),
-                new Vector3(-boundarySize/2, -boundarySize/2, boundaryZ),
+                new Vector3(-boundarySize / 2, -boundarySize / 2, boundaryZ),
+                new Vector3(boundarySize / 2, -boundarySize / 2, boundaryZ),
+                new Vector3(boundarySize / 2, boundarySize / 2, boundaryZ),
+                new Vector3(-boundarySize / 2, boundarySize / 2, boundaryZ),
+                new Vector3(-boundarySize / 2, -boundarySize / 2, boundaryZ),
             ];
             const boundaryGeometry = new BufferGeometry().setFromPoints(boundaryPoints);
             const boundaryMaterial = new LineBasicMaterial({ color: 0x1976d2, linewidth: 2 });
             this.boundaryBox = new Line(boundaryGeometry, boundaryMaterial);
             scene.add(this.boundaryBox);
         } else {
-            const grid = new GridHelper(100, 100);
+            const grid = new GridHelper(150, 150);
             scene.add(grid);
         }
         const axesHelper = new AxesHelper(2);
@@ -260,10 +260,10 @@ export class Viewer {
         this.updateWallList();
         return wall;
     }
-
+    d
     private createWallMesh2D(wall: Wall) {
-        const material = new LineBasicMaterial({ 
-            color: wall.selected ? 0xff0000 : (wall.highlighted ? 0x00ff00 : 0x000000)
+        const material = new LineBasicMaterial({
+            color: wall.selected ? 0xff0000 : (wall.highlighted ? 0x1976d2 : 0x000000)
         });
         const points = [wall.start, wall.end];
         const geometry = new BufferGeometry().setFromPoints(points);
@@ -273,7 +273,7 @@ export class Viewer {
         const wallThickness = this.wallThickness;
         const wallLength = wall.length;
         const wallGeometry = new BoxGeometry(wallLength, wallThickness, 0.01);
-        const wallMaterial = new MeshStandardMaterial({ 
+        const wallMaterial = new MeshStandardMaterial({
             color: wall.selected ? 0xff0000 : (wall.highlighted ? 0x00ff00 : 0xcccccc),
             side: DoubleSide
         });
@@ -287,6 +287,7 @@ export class Viewer {
         this.scene2D.add(line);
         this.scene2D.add(wallMesh);
         this.wallMeshes.set(wall.id, wallMesh);
+        this.wallLines.set(wall.id, line); // <-- Add this line
 
         this.addDimensionLabel(wall);
     }
@@ -313,35 +314,74 @@ export class Viewer {
     }
 
     private onMouseDown(e: MouseEvent) {
-        if (this.is2D) {
-            if (e.button === 0 && this.wallDrawingEnabled) {
-                const intersects = this.getIntersectionPoint();
-                if (intersects) {
-                    if (!this.isDrawing) {
-                        this.isDrawing = true;
-                        this.currentStartPoint = intersects;
-                        this.tempLine = this.createTempLine(intersects, intersects);
-                        this.scene2D.add(this.tempLine);
-                    } else {
-                        const wall = this.addWall(this.currentStartPoint!, intersects);
-                        this.isDrawing = false;
-                        this.scene2D.remove(this.tempLine!);
-                        this.tempLine = null;
-                        this.currentStartPoint = null;
-                    }
-                }
-            } else if (e.button === 2) {
-                const intersects = this.getWallIntersection();
-                if (intersects.length > 0) {
-                    const wallId = intersects[0].object.userData.wallId;
-                    console.log('Selecting wall:', wallId);
-                    this.selectWall(wallId);
+        if (this.is2D && e.button === 0 && this.wallDrawingEnabled) {
+            const intersects = this.getIntersectionPoint();
+            if (intersects) {
+                if (!this.isDrawing) {
+                    this.isDrawing = true;
+                    this.currentStartPoint = intersects;
+                    this.tempLine = this.createTempLine(intersects, intersects);
+                    this.scene2D.add(this.tempLine);
+
+                    // ESC to cancel
+                    window.addEventListener("keydown", this.handleEscKey);
+                    // Double-click to end
+                    this.lastClickTime = performance.now();
                 } else {
-                    this.clearWallStates();
+                    const wall = this.addWall(this.currentStartPoint!, intersects);
+                    this.currentStartPoint = intersects;
+
+                    if (this.tempLine) {
+                        this.scene2D.remove(this.tempLine);
+                        this.tempLine.geometry.dispose();
+                        (this.tempLine.material as LineBasicMaterial).dispose();
+                        this.tempLine = null;
+                    }
+
+                    // Prepare new temp line
+                    this.tempLine = this.createTempLine(this.currentStartPoint, this.currentStartPoint);
+                    this.scene2D.add(this.tempLine);
+
+                    // Double-click to finish
+                    const now = performance.now();
+                    if (now - this.lastClickTime < 300) {
+                        this.endWallDrawing();
+                    }
+                    this.lastClickTime = now;
                 }
             }
         }
+
+        if (e.button === 2) {
+            const intersects = this.getWallIntersection();
+            if (intersects.length > 0) {
+                const wallId = intersects[0].object.userData.wallId;
+                this.selectWall(wallId);
+            } else {
+                this.clearWallStates();
+            }
+        }
     }
+
+    private handleEscKey = (e: KeyboardEvent) => {
+        if (e.key === 'Escape') {
+            this.endWallDrawing();
+        }
+    }
+
+    private endWallDrawing() {
+        this.isDrawing = false;
+        if (this.tempLine) {
+            this.scene2D.remove(this.tempLine);
+            this.tempLine.geometry.dispose();
+            (this.tempLine.material as LineBasicMaterial).dispose();
+            this.tempLine = null;
+        }
+        this.currentStartPoint = null;
+        window.removeEventListener("keydown", this.handleEscKey);
+    }
+
+
 
     private onMouseUp(e: MouseEvent) {
         // Handle any mouse up events if needed
@@ -435,7 +475,7 @@ export class Viewer {
             const aspect = this.container.clientWidth / this.container.clientHeight;
             const viewSize = Math.max(width / aspect, height);
             this.camera2D.position.set(centerX, centerY, 5);
-            this.camera2D.zoom = 100 / viewSize; 
+            this.camera2D.zoom = 100 / viewSize;
             this.camera2D.updateProjectionMatrix();
             this.controls2D.target.set(centerX, centerY, 0);
             this.controls2D.update();
@@ -464,11 +504,11 @@ export class Viewer {
             const maxDim = Math.max(size.x, size.y, size.z);
             const fov = this.camera3D.fov * (Math.PI / 180);
             const distance = Math.max(maxDim * 1.5, 20);
-            const angle = Math.PI / 4; 
+            const angle = Math.PI / 4;
             this.camera3D.position.set(
-                center.x + distance * Math.sin(angle),  
-                center.y + distance * 0.7,              
-                center.z + distance * Math.cos(angle)  
+                center.x + distance * Math.sin(angle),
+                center.y + distance * 0.7,
+                center.z + distance * Math.cos(angle)
             );
             this.camera3D.lookAt(center);
             this.controls3D.target.copy(center);
@@ -484,16 +524,16 @@ export class Viewer {
         label.style.fontSize = '12px';
         label.style.pointerEvents = 'none';
         label.textContent = `${wall.length.toFixed(2)}m`;
-        
+
         const midPoint = new Vector3().addVectors(wall.start, wall.end).multiplyScalar(0.5);
         const screenPosition = midPoint.project(this.camera2D);
-        
+
         const x = (screenPosition.x * 0.5 + 0.5) * this.container.clientWidth;
         const y = (-screenPosition.y * 0.5 + 0.5) * this.container.clientHeight;
-        
+
         label.style.left = `${x}px`;
         label.style.top = `${y}px`;
-        
+
         this.container.appendChild(label);
     }
 
@@ -528,6 +568,13 @@ export class Viewer {
             const material = mesh.material as MeshStandardMaterial;
             material.color.setHex(
                 wall.selected ? 0xff0000 : (wall.highlighted ? 0x1976d2 : 0xcccccc)
+            );
+        }
+        const line = this.wallLines.get(wall.id);
+        if (line) {
+            const lineMaterial = line.material as LineBasicMaterial;
+            lineMaterial.color.setHex(
+                wall.selected ? 0xff0000 : (wall.highlighted ? 0x1976d2 : 0x000000)
             );
         }
     }
