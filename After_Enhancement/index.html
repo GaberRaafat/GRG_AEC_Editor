@@ -187,7 +187,7 @@
         }
 
         /* Wall List Panel */
-        #wall-list {
+        /* #wall-list {
             position: fixed;
             top: 20px;
             right: 20px;
@@ -215,7 +215,67 @@
             gap: 8px;
             text-transform: uppercase;
             letter-spacing: 0.5px;
+        } */
+
+        #wall-list {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 280px;
+            max-height: 65vh;
+            overflow-y: auto;
+            padding: 20px 18px;
+            border-radius: 12px;
+            background: linear-gradient(145deg, rgba(25, 28, 36, 0.95), rgba(32, 35, 45, 0.95));
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow:
+                0 2px 6px rgba(0, 0, 0, 0.3),
+                0 12px 28px rgba(0, 0, 0, 0.25);
+            backdrop-filter: blur(10px);
+            z-index: 1001;
+            color: var(--text-primary);
+            font-family: 'Segoe UI', Roboto, sans-serif;
+            transition: all 0.3s ease-in-out;
         }
+
+        #wall-list:hover {
+            box-shadow:
+                0 4px 12px rgba(0, 0, 0, 0.4),
+                0 20px 40px rgba(0, 0, 0, 0.35);
+        }
+
+        #wall-list .header {
+            font-size: 16px;
+            font-weight: 700;
+            color: #66ccff;
+            margin-bottom: 16px;
+            letter-spacing: 0.6px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding-bottom: 8px;
+            text-transform: uppercase;
+        }
+
+        #wall-list div:not(.header) {
+            margin-bottom: 14px;
+            padding: 12px 10px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: background 0.2s ease;
+        }
+
+        #wall-list div:not(.header):hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        #wall-list span {
+            display: block;
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+
 
         #wall-list em {
             color: var(--text-secondary);
