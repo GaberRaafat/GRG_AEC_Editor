@@ -22,9 +22,7 @@
             --panel-width: 280px;
             --toolbar-height: 52px;
             --mode-2d-color: #4CAF50;
-            /* Green for 2D mode */
             --mode-3d-color: #2196F3;
-            /* Blue for 3D mode */
         }
 
         * {
@@ -50,12 +48,20 @@
             background: #0a0e13;
         }
 
-        /* Floating Control Panel */
+        /* Control Panel Layout */
         .control-panel {
             position: absolute;
             top: 20px;
             left: 20px;
             z-index: 1000;
+            display: flex;
+            flex-direction: row;
+            align-items: flex-start;
+            gap: 20px;
+        }
+
+        /* Toolbar Container */
+        .toolbar-container {
             display: flex;
             flex-direction: column;
             gap: 12px;
@@ -104,10 +110,83 @@
             background: rgba(255, 255, 255, 0.1);
         }
 
+        /* Enhanced Toggle Button */
+        #toggle-details {
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: none;
+            background: linear-gradient(145deg, var(--accent), var(--accent-hover));
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        #toggle-details:hover {
+            background: linear-gradient(145deg, var(--accent-hover), var(--accent));
+            box-shadow: 0 4px 12px rgba(74, 144, 226, 0.4);
+            transform: translateY(-1px);
+        }
+
+        #toggle-details:active {
+            transform: translateY(1px);
+        }
+
+        #toggle-details i {
+            transition: transform 0.3s ease;
+        }
+
+        #toggle-details.active i {
+            transform: rotate(180deg);
+        }
+
+        /* Enhanced Instructions Panel */
+        #instructions {
+            display: none;
+            margin-top: 12px;
+            padding: 16px;
+            border-radius: var(--border-radius);
+            background: var(--bg-secondary);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: var(--shadow);
+            width: 280px;
+            backdrop-filter: blur(4px);
+        }
+
+        #instructions ul {
+            margin: 0;
+            padding-left: 20px;
+            list-style-type: none;
+        }
+
+        #instructions li {
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px dashed rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        #instructions li:last-child {
+            margin-bottom: 0;
+            padding-bottom: 0;
+            border-bottom: none;
+        }
+
+        #instructions strong {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
         /* Updated Switch Mode Button */
         #switch-mode-btn {
             width: 60px;
-            /* Wider to accommodate text */
             position: relative;
             overflow: hidden;
             background-color: var(--mode-2d-color);
@@ -186,37 +265,6 @@
             box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
         }
 
-        /* Wall List Panel */
-        /* #wall-list {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: var(--bg-secondary);
-            border-radius: var(--border-radius);
-            box-shadow: var(--shadow);
-            padding: 16px;
-            width: 240px;
-            max-height: 60vh;
-            overflow-y: auto;
-            backdrop-filter: blur(4px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            color: var(--text-primary);
-            z-index: 1001;
-            margin: 0;
-        }
-
-        #wall-list .header {
-            font-weight: 600;
-            font-size: 14px;
-            margin-bottom: 16px;
-            color: var(--accent);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        } */
-
         #wall-list {
             position: fixed;
             top: 20px;
@@ -276,7 +324,6 @@
             line-height: 1.4;
         }
 
-
         #wall-list em {
             color: var(--text-secondary);
             font-style: normal;
@@ -321,6 +368,20 @@
             color: white;
             box-shadow: 0 2px 8px rgba(74, 144, 226, 0.3);
         }
+
+        #wall-context-menu {
+            position: absolute;
+            display: none;
+            background: #222;
+            border: 1px solid #444;
+            padding: 6px 12px;
+            border-radius: 6px;
+            color: white;
+            font-size: 13px;
+            cursor: pointer;
+            z-index: 2000;
+            width: 150px;
+        }
     </style>
 </head>
 
@@ -329,52 +390,94 @@
 
     <!-- Control Panel -->
     <div class="control-panel">
-        <!-- Main Toolbar -->
-        <div class="toolbar">
-            <div class="tool-group">
-                <button id="switch-mode-btn" class="tool-btn" title="Switch View Mode">
-                    <i class="fas fa-cube" id="switch-mode-icon"></i>
-                </button>
-                <button id="zoom-extend" class="tool-btn" title="Zoom to Fit">
-                    <i class="fas fa-expand"></i>
-                </button>
-                <!-- New Wall Tool Button -->
-                <button id="wall-tool" class="tool-btn" title="Wall Drawing Tool">
-                    <i class="fas fa-ruler-horizontal"></i>
-                </button>
+        <!-- Toolbar and Toggle Container -->
+        <div class="toolbar-container">
+            <!-- Main Toolbar -->
+            <div class="toolbar">
+                <div class="tool-group">
+                    <button id="switch-mode-btn" class="tool-btn" title="Switch View Mode">
+                        <i class="fas fa-cube" id="switch-mode-icon"></i>
+                    </button>
+                    <button id="zoom-extend" class="tool-btn" title="Zoom to Fit">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                    <button id="wall-tool" class="tool-btn" title="Wall Drawing Tool">
+                        <i class="fas fa-ruler-horizontal"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Toggle Button and Instructions -->
+            <button id="toggle-details" class="toggle-btn">
+                <i class="fas fa-chevron-down"></i>
+                <span>Show Instructions</span>
+            </button>
+            <div id="instructions">
+                <ul>
+                    <li><strong>Wall Drawing:</strong> Click the wall tool button to start drawing walls. Click to place points, double-click or press <strong>ESC</strong> to finish.</li>
+                    <li><strong>Wall Selection:</strong> Hover to highlight, left-click to select (red), right-click for context menu.</li>
+                    <li><strong>Wall Deletion:</strong> Right click on any wall and select "Delete" to remove the wall</li>
+                    <li><strong>Navigation:</strong> Use mouse wheel to zoom, drag to pan the canvas.</li>
+                    <li><strong>View Modes:</strong> Switch between 2D and 3D using the view mode button.</li>
+                    <li><strong>Wall List:</strong> See all wall details in the right panel.</li>
+                </ul>
             </div>
         </div>
+    </div>
 
-        <div id="wall-list">
-            <div id="wall-list-content"></div>
-        </div>
+    <ul id="wall-context-menu">
+        Delete Wall
+    </ul>
 
-        <script type="module" src="/src/main.ts"></script>
-        <script>
-            // Mode switching functionality
-            document.getElementById('switch-mode-btn').addEventListener('click', function () {
-                const body = document.body;
-                if (body.classList.contains('mode-2d')) {
-                    body.classList.remove('mode-2d');
-                    body.classList.add('mode-3d');
-                } else {
-                    body.classList.remove('mode-3d');
-                    body.classList.add('mode-2d');
-                }
-            });
+    <div id="wall-list">
+        <div class="header">Wall List</div>
+        <div id="wall-list-content"></div>
+    </div>
 
-            document.getElementById('wall-tool').addEventListener('click', function () {
-                const isActive = this.classList.toggle('active');
-                document.dispatchEvent(new CustomEvent('wallDrawingToggle', {
-                    detail: { enabled: isActive }
-                }));
-                if (isActive) {
-                    this.title = "Click to disable wall drawing";
-                } else {
-                    this.title = "Click to enable wall drawing";
-                }
-            });
-        </script>
+    <script type="module" src="/src/main.ts"></script>
+    <script>
+        // Mode switching functionality
+        document.getElementById('switch-mode-btn').addEventListener('click', function () {
+            const body = document.body;
+            if (body.classList.contains('mode-2d')) {
+                body.classList.remove('mode-2d');
+                body.classList.add('mode-3d');
+            } else {
+                body.classList.remove('mode-3d');
+                body.classList.add('mode-2d');
+            }
+        });
+
+        document.getElementById('wall-tool').addEventListener('click', function () {
+            const isActive = this.classList.toggle('active');
+            document.dispatchEvent(new CustomEvent('wallDrawingToggle', {
+                detail: { enabled: isActive }
+            }));
+            if (isActive) {
+                this.title = "Click to disable wall drawing";
+            } else {
+                this.title = "Click to enable wall drawing";
+            }
+        });
+
+        // Enhanced toggle functionality
+        const toggleBtn = document.getElementById('toggle-details');
+        const instructions = document.getElementById('instructions');
+
+        toggleBtn.addEventListener('click', () => {
+            const isExpanded = instructions.style.display === 'block';
+            
+            if (isExpanded) {
+                instructions.style.display = 'none';
+                toggleBtn.innerHTML = '<i class="fas fa-chevron-down"></i><span>Show Instructions</span>';
+                toggleBtn.classList.remove('active');
+            } else {
+                instructions.style.display = 'block';
+                toggleBtn.innerHTML = '<i class="fas fa-chevron-up"></i><span>Hide Instructions</span>';
+                toggleBtn.classList.add('active');
+            }
+        });
+    </script>
 </body>
 
 </html>

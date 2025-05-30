@@ -1,3 +1,8 @@
+
+import { Line2 } from 'three/examples/jsm/lines/Line2.js';
+import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js';
+import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js';
+
 import {
     LineBasicMaterial, WebGLRenderer, Vector3, Color, Scene, PerspectiveCamera,
     OrthographicCamera, GridHelper, AxesHelper, AmbientLight,
@@ -43,6 +48,8 @@ export class Viewer {
     private wallThickness: number = 0.2;
     private wallListExpanded: boolean = false;
     private wallDrawingEnabled: boolean = false;
+    private selectedWallId: string | null = null;
+
 
     constructor(container: HTMLElement) {
         this.container = container;
@@ -64,6 +71,13 @@ export class Viewer {
 
         window.addEventListener('resize', this.onWindowResize.bind(this));
 
+        window.addEventListener("keydown", (e) => {
+            if (e.key === "Delete" && this.selectedWallId) {
+                this.deleteSelectedWall();
+            }
+        });
+
+
         const thicknessInput = document.getElementById('wall-thickness') as HTMLInputElement;
         if (thicknessInput) {
             thicknessInput.addEventListener('input', () => {
@@ -73,6 +87,20 @@ export class Viewer {
                 }
             });
         }
+
+        // Right-click context menu delete
+        const contextMenu = document.getElementById("wall-context-menu");
+        if (contextMenu) {
+            contextMenu.addEventListener("click", () => {
+                this.deleteSelectedWall();
+                contextMenu.style.display = "none";
+            });
+
+            window.addEventListener("click", () => {
+                contextMenu.style.display = "none";
+            });
+        }
+
 
         document.addEventListener('wallDrawingToggle', (e: CustomEvent) => {
             this.setWallDrawingEnabled(e.detail.enabled);
@@ -101,6 +129,62 @@ export class Viewer {
         this.addGridAndLights(this.scene2D);
         this.addGridAndLights(this.scene3D);
     }
+
+
+    private deleteSelectedWall() {
+        if (!this.selectedWallId) return;
+        debugger;
+        const id = this.selectedWallId;
+
+        // Remove from walls array
+        this.walls = this.walls.filter(w => w.id !== id);
+
+        // Remove 2D objects
+        const line = this.wallLines.get(id);
+        const mesh2D = this.wallMeshes.get(id);
+        if (line) {
+            this.scene2D.remove(line);
+            line.geometry.dispose();
+            (line.material as LineBasicMaterial).dispose();
+            this.wallLines.delete(id);
+        }
+        if (mesh2D) {
+            this.scene2D.remove(mesh2D);
+            if (mesh2D instanceof Mesh) {
+                mesh2D.geometry.dispose();
+                (mesh2D.material as MeshStandardMaterial).dispose();
+            }
+            this.wallMeshes.delete(id);
+        }
+
+        // Remove from 3D
+        if (this.scene3D) {
+            const mesh3D = this.wallMeshes.get(id);
+            if (mesh3D) {
+                this.scene3D.remove(mesh3D);
+                if (mesh3D instanceof Mesh) {
+                    mesh3D.geometry.dispose();
+                    (mesh3D.material as MeshStandardMaterial).dispose();
+                }
+                this.wallMeshes.delete(id);
+            }
+        }
+
+        // Clear selection
+        this.selectedWallId = null;
+        this.updateWallList();
+    }
+
+    private selectWall(id: string) {
+        this.selectedWallId = id;
+        this.walls.forEach(wall => {
+            wall.selected = wall.id === id;
+            this.updateWallAppearance(wall);
+        });
+        this.updateWallList();
+    }
+
+
 
     private createRenderer(): WebGLRenderer {
         const renderer = new WebGLRenderer({ antialias: true });
@@ -260,19 +344,30 @@ export class Viewer {
         this.updateWallList();
         return wall;
     }
-    d
+
     private createWallMesh2D(wall: Wall) {
-        const material = new LineBasicMaterial({
-            color: wall.selected ? 0xff0000 : (wall.highlighted ? 0x1976d2 : 0x000000)
+        // Create Line2 geometry
+        const lineGeometry = new LineGeometry();
+        lineGeometry.setPositions([
+            wall.start.x, wall.start.y, wall.start.z,
+            wall.end.x, wall.end.y, wall.end.z
+        ]);
+
+        // Use LineMaterial from Line2 (requires resolution)
+        const lineMaterial = new LineMaterial({
+            color: wall.selected ? 0xff0000 : (wall.highlighted ? 0x1976d2 : 0x000000),
+            linewidth: 0.005, // in world units (~0.005 = 5px at zoom=1)
+            dashed: false
         });
-        const points = [wall.start, wall.end];
-        const geometry = new BufferGeometry().setFromPoints(points);
-        const line = new Line(geometry, material);
+        lineMaterial.resolution.set(this.container.clientWidth, this.container.clientHeight);
+
+        const line = new Line2(lineGeometry, lineMaterial);
+        line.computeLineDistances(); // required for Line2 to work
         line.userData.wallId = wall.id;
 
-        const wallThickness = this.wallThickness;
+        // Create simple 2D wall mesh (for future use)
         const wallLength = wall.length;
-        const wallGeometry = new BoxGeometry(wallLength, wallThickness, 0.01);
+        const wallGeometry = new BoxGeometry(wallLength, 0.8, 0.01);
         const wallMaterial = new MeshStandardMaterial({
             color: wall.selected ? 0xff0000 : (wall.highlighted ? 0x00ff00 : 0xcccccc),
             side: DoubleSide
@@ -284,13 +379,15 @@ export class Viewer {
         wallMesh.rotation.z = wall.angle;
         wallMesh.userData.wallId = wall.id;
 
+        // Add to scene and tracking maps
         this.scene2D.add(line);
         this.scene2D.add(wallMesh);
         this.wallMeshes.set(wall.id, wallMesh);
-        this.wallLines.set(wall.id, line); // <-- Add this line
+        this.wallLines.set(wall.id, line);
 
         this.addDimensionLabel(wall);
     }
+
 
     private onMouseMove(e: MouseEvent) {
         this.updateMousePosition(e);
@@ -314,40 +411,46 @@ export class Viewer {
     }
 
     private onMouseDown(e: MouseEvent) {
-        if (this.is2D && e.button === 0 && this.wallDrawingEnabled) {
+        this.updateMousePosition(e);
+        if (this.is2D && e.button === 0) {
             const intersects = this.getIntersectionPoint();
-            if (intersects) {
-                if (!this.isDrawing) {
-                    this.isDrawing = true;
-                    this.currentStartPoint = intersects;
-                    this.tempLine = this.createTempLine(intersects, intersects);
-                    this.scene2D.add(this.tempLine);
 
-                    // ESC to cancel
-                    window.addEventListener("keydown", this.handleEscKey);
-                    // Double-click to end
-                    this.lastClickTime = performance.now();
+            if (this.wallDrawingEnabled) {
+                // Draw wall logic
+                if (intersects) {
+                    if (!this.isDrawing) {
+                        this.isDrawing = true;
+                        this.currentStartPoint = intersects;
+                        this.tempLine = this.createTempLine(intersects, intersects);
+                        this.scene2D.add(this.tempLine);
+                        window.addEventListener("keydown", this.handleEscKey);
+                        this.lastClickTime = performance.now();
+                    } else {
+                        const wall = this.addWall(this.currentStartPoint!, intersects);
+                        this.currentStartPoint = intersects;
+                        if (this.tempLine) {
+                            this.scene2D.remove(this.tempLine);
+                            this.tempLine.geometry.dispose();
+                            (this.tempLine.material as LineBasicMaterial).dispose();
+                            this.tempLine = null;
+                        }
+                        this.tempLine = this.createTempLine(this.currentStartPoint, this.currentStartPoint);
+                        this.scene2D.add(this.tempLine);
+                        const now = performance.now();
+                        if (now - this.lastClickTime < 300) {
+                            this.endWallDrawing();
+                        }
+                        this.lastClickTime = now;
+                    }
+                }
+            } else {
+                // 🔥 Select wall with left click if not drawing
+                const wallHits = this.getWallIntersection();
+                if (wallHits.length > 0) {
+                    const wallId = wallHits[0].object.userData.wallId;
+                    this.selectWall(wallId);
                 } else {
-                    const wall = this.addWall(this.currentStartPoint!, intersects);
-                    this.currentStartPoint = intersects;
-
-                    if (this.tempLine) {
-                        this.scene2D.remove(this.tempLine);
-                        this.tempLine.geometry.dispose();
-                        (this.tempLine.material as LineBasicMaterial).dispose();
-                        this.tempLine = null;
-                    }
-
-                    // Prepare new temp line
-                    this.tempLine = this.createTempLine(this.currentStartPoint, this.currentStartPoint);
-                    this.scene2D.add(this.tempLine);
-
-                    // Double-click to finish
-                    const now = performance.now();
-                    if (now - this.lastClickTime < 300) {
-                        this.endWallDrawing();
-                    }
-                    this.lastClickTime = now;
+                    this.clearWallStates();
                 }
             }
         }
@@ -357,10 +460,16 @@ export class Viewer {
             if (intersects.length > 0) {
                 const wallId = intersects[0].object.userData.wallId;
                 this.selectWall(wallId);
+
+                const menu = document.getElementById("wall-context-menu")!;
+                menu.style.left = `${e.clientX}px`;
+                menu.style.top = `${e.clientY}px`;
+                menu.style.display = "block";
             } else {
                 this.clearWallStates();
             }
         }
+
     }
 
     private handleEscKey = (e: KeyboardEvent) => {
@@ -417,9 +526,20 @@ export class Viewer {
 
     private getWallIntersection(): any[] {
         this.raycaster.setFromCamera(this.mouse, this.is2D ? this.camera2D : this.camera3D);
-        const wallObjects = Array.from(this.wallMeshes.values()).filter(obj => obj instanceof Mesh);
-        return this.raycaster.intersectObjects(wallObjects);
+
+        const objectsToTest: Object3D[] = [];
+
+        // Check both line and mesh objects in 2D
+        if (this.is2D) {
+            objectsToTest.push(...Array.from(this.wallLines.values()));
+            objectsToTest.push(...Array.from(this.wallMeshes.values()));
+        } else {
+            objectsToTest.push(...Array.from(this.wallMeshes.values()));
+        }
+
+        return this.raycaster.intersectObjects(objectsToTest, false);
     }
+
 
     private animate() {
         requestAnimationFrame(this.animate.bind(this));
@@ -450,6 +570,13 @@ export class Viewer {
 
         this.camera3D.aspect = aspect;
         this.camera3D.updateProjectionMatrix();
+        this.wallLines.forEach(line => {
+            if (line instanceof Line2) {
+                const mat = line.material as LineMaterial;
+                mat.resolution.set(this.container.clientWidth, this.container.clientHeight);
+            }
+        });
+
     }
 
     public zoomExtend() {
@@ -546,6 +673,7 @@ export class Viewer {
     }
 
     private selectWall(id: string) {
+        this.selectedWallId = id;
         this.walls.forEach(wall => {
             wall.selected = wall.id === id;
             this.updateWallAppearance(wall);
